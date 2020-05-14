@@ -128,6 +128,54 @@ let handleUpdate = (setState, admin) =>
     }
   );
 
+let drawer2Test = () => {
+  let (drawer, setDrawer) = React.useState(() => false);
+  let (innerDrawer, setInnerDrawer) = React.useState(() => 0);
+  let level = innerDrawer == 0 ? 0 : 1;
+
+  <div>
+    <button
+      onClick={_ => setDrawer(_ => true)} className="btn btn-primary my-6">
+      {str("Open main drawer")}
+    </button>
+    {drawer
+       ? <SchoolAdmin__EditorDrawer2
+           level closeDrawerCB={() => setDrawer(_ => false)}>
+           <div className="px-6">
+             <button
+               onClick={_ => setInnerDrawer(_ => 1)}
+               className="btn btn-primary my-6">
+               {str("Open inner drawer 1")}
+             </button>
+             <br />
+             <button
+               onClick={_ => setInnerDrawer(_ => 2)}
+               className="btn btn-primary my-6">
+               {str("Open inner drawer 2")}
+             </button>
+             {switch (innerDrawer) {
+              | 1 =>
+                <SchoolAdmin__EditorDrawer2
+                  closeIconClassName="fas fa-arrow-left"
+                  closeDrawerCB={() => setInnerDrawer(_ => 0)}>
+                  <div className="p-6"> {str("This is inner drawer 1")} </div>
+                </SchoolAdmin__EditorDrawer2>
+              | 2 =>
+                <SchoolAdmin__EditorDrawer2
+                  closeIconClassName="fas fa-arrow-left"
+                  closeDrawerCB={() => setInnerDrawer(_ => 0)}>
+                  <div className="p-6">
+                    {str("And this is inner drawer 2")}
+                  </div>
+                </SchoolAdmin__EditorDrawer2>
+              | _ => React.null
+              }}
+           </div>
+         </SchoolAdmin__EditorDrawer2>
+       : React.null}
+  </div>;
+};
+
 [@react.component]
 let make = (~currentSchoolAdminId, ~admins) => {
   let (state, setState) =
@@ -160,6 +208,7 @@ let make = (~currentSchoolAdminId, ~admins) => {
         </div>
         <div className="px-6 pb-4 mt-5 flex">
           <div className="max-w-2xl w-full mx-auto">
+            {drawer2Test()}
             <div className="flex -mx-3 flex-wrap">
               {state.admins
                |> SchoolAdmin.sort

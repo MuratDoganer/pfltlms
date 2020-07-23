@@ -45,8 +45,15 @@ Rails.application.config.content_security_policy do |policy|
     { connect: 'https://api.rollbar.com' }
   end
 
+  def katex_csp
+    {
+      style: %w[https://cdn.jsdelivr.net/npm/katex/dist/ https://cdn.jsdelivr.net/npm/markdown-it-texmath/css/texmath.min.css],
+      font: %w[https://cdn.jsdelivr.net/npm/katex/dist/fonts/],
+    }
+  end
+
   def style_sources
-    ['fonts.googleapis.com', asset_host] - [nil]
+    ['fonts.googleapis.com', asset_host, *katex_csp[:style]] - [nil]
   end
 
   def connect_sources
@@ -56,7 +63,7 @@ Rails.application.config.content_security_policy do |policy|
   end
 
   def font_sources
-    ['fonts.gstatic.com', asset_host] - [nil]
+    ['fonts.gstatic.com', asset_host, *katex_csp[:font]] - [nil]
   end
 
   def child_sources
@@ -67,7 +74,7 @@ Rails.application.config.content_security_policy do |policy|
     [
       'https://sv-co-public-slackin.herokuapp.com', 'https://www.google.com',
       typeform_csp[:frame], youtube_csp[:frame], vimeo_csp[:frame], *slideshare_csp[:frame], *speakerdeck_csp[:frame],
-      *google_form_csp[:frame], facebook_csp[:frame]
+      *google_form_csp[:frame], facebook_csp[:frame],
     ]
   end
 

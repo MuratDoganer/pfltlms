@@ -18,6 +18,7 @@ const superscriptPlugin = require("markdown-it-sup");
 const tablePlugin = require("markdown-it-multimd-table");
 const linkifyImagesPlugin = require("markdown-it-linkify-images");
 const imageSizePlugin = require("markdown-it-imsize");
+const texmathPlugin = texmath.use(katex);
 
 md.use(subscriptPlugin)
   .use(superscriptPlugin)
@@ -25,6 +26,11 @@ md.use(subscriptPlugin)
   .use(imageSizePlugin)
   .use(linkifyImagesPlugin, {
     target: "_blank",
+  })
+  .use(texmathPlugin, {
+    engine: katex,
+    delimiters: "dollars",
+    katexOptions: { macros: { "\\RR": "\\mathbb{R}" } },
   });
 
 const parse = (markdown) => {

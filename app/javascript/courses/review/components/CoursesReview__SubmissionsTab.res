@@ -14,8 +14,8 @@ type state =
 
 module SubmissionsQuery = %graphql(
   `
-    query SubmissionsQuery($courseId: ID!, $status: SubmissionStatus!, $sortDirection: SortDirection!,$sortCriterion: SubmissionSortCriterion!, $levelId: ID, $coachId: ID, $after: String) {
-      submissions(courseId: $courseId, status: $status, sortDirection: $sortDirection, sortCriterion: $sortCriterion, levelId: $levelId, coachId: $coachId, first: 20, after: $after) {
+    query SubmissionsQuery($courseId: ID!, $status: SubmissionStatus!, $sortDirection: SortDirection!,$sortCriterion: SubmissionSortCriterion!, $levelId: ID, $tags: [String!]!,$search: String, $coachId: ID, $after: String) {
+      submissions(courseId: $courseId, status: $status, sortDirection: $sortDirection, sortCriterion: $sortCriterion, levelId: $levelId, coachId: $coachId, first: 20, after: $after, search: $search, tags: $tags) {
         nodes {
           id,
           title,
@@ -73,6 +73,8 @@ let getSubmissions = (
   selectedTab,
   submissions,
   updateSubmissionsCB,
+  search,
+  tags,
 ) => {
   setState(state =>
     switch state {
@@ -87,6 +89,8 @@ let getSubmissions = (
   let coachId = selectedCoach |> OptionUtils.map(coach => coach |> Coach.id)
   let sortDirection = SubmissionsSorting.sortDirection(sortBy)
   let sortCriterion = SubmissionsSorting.sortCriterion(sortBy)
+  let tags = Belt.Set.String.toArray(tags)
+
   SubmissionsQuery.make(
     ~courseId,
     ~status=selectedTab,
@@ -94,6 +98,8 @@ let getSubmissions = (
     ~sortCriterion,
     ~levelId?,
     ~coachId?,
+    ~search?,
+    ~tags,
     ~after=?cursor,
     (),
   )
@@ -217,13 +223,15 @@ let make = (
   ~levels,
   ~submissions,
   ~updateSubmissionsCB,
+  ~search,
+  ~tags,
   ~reloadAt,
 ) => {
   let (state, setState) = React.useState(() => Loading)
 
-  React.useEffect5(() => {
+  React.useEffect7(() => {
     let needsReloading =
-      submissions |> Submissions.needsReloading(selectedLevel, selectedCoach, sortBy)
+      submissions |> Submissions.needsReloading(selectedLevel, selectedCoach, sortBy, search, tags)
     if needsReloading {
       setState(_ => Reloading)
 
@@ -237,11 +245,13 @@ let make = (
         selectedTab,
         [],
         updateSubmissionsCB,
+        search,
+        tags,
       )
     }
 
     None
-  }, (selectedLevel, selectedCoach, sortBy, selectedTab, reloadAt))
+  }, (selectedLevel, selectedCoach, sortBy, selectedTab, reloadAt, search, tags))
 
   <div>
     <LoadingSpinner loading={state == Reloading} />
@@ -266,6 +276,8 @@ let make = (
                   selectedTab,
                   submissions,
                   updateSubmissionsCB,
+                  search,
+                  tags,
                 )
               }}>
               {"Load More..." |> str}

@@ -3,9 +3,16 @@ module Level = CoursesReview__Level
 type filter = {
   level: option<Level.t>,
   coach: option<UserProxy.t>,
+  search: option<string>,
+  tags: Belt.Set.String.t,
 }
 
-let makeFilter = (level, coach) => {level: level, coach: coach}
+let makeFilter = (level, coach, search, tags) => {
+  level: level,
+  coach: coach,
+  search: search,
+  tags: tags,
+}
 
 let filterLevelId = level => level |> OptionUtils.mapWithDefault(Level.id, "none")
 let filterCoachId = coach => coach |> OptionUtils.mapWithDefault(UserProxy.id, "none")
@@ -38,24 +45,46 @@ let totalCount = t =>
 
 let unloaded = Unloaded
 
-let partiallyLoaded = (~submissions, ~filter, ~sortBy, ~totalCount, ~cursor) => PartiallyLoaded(
-  {submissions: submissions, filter: filter, sortBy: sortBy, totalCount: totalCount},
+let partiallyLoaded = (
+  ~submissions,
+  ~filter,
+  ~sortBy,
+  ~search,
+  ~tags,
+  ~totalCount,
+  ~cursor,
+) => PartiallyLoaded(
+  {
+    submissions: submissions,
+    filter: filter,
+    sortBy: sortBy,
+    totalCount: totalCount,
+    search: search,
+    tags: tags,
+  },
   cursor,
 )
 
-let fullyLoaded = (~submissions, ~filter, ~sortBy, ~totalCount) => FullyLoaded({
+let fullyLoaded = (~submissions, ~filter, ~sortBy, ~search, ~tags, ~totalCount) => FullyLoaded({
   submissions: submissions,
   filter: filter,
   sortBy: sortBy,
+  search: search,
+  tags: tags,
   totalCount: totalCount,
 })
 
-let needsReloading = (selectedLevel, selectedCoach, sortBy, t) =>
+let needsReloading = (selectedLevel, selectedCoach, sortBy, search, tags, t) =>
   switch t {
   | Unloaded => true
   | FullyLoaded(data)
   | PartiallyLoaded(data, _) =>
-    !(data.filter |> filterEq(selectedLevel, selectedCoach) && data.sortBy == sortBy)
+    !(
+      data.filter |> filterEq(selectedLevel, selectedCoach) &&
+      data.sortBy == sortBy &&
+      data.search == search &&
+      data.tags == tags
+    )
   }
 
 let toArray = t =>

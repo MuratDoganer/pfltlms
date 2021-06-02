@@ -18,7 +18,9 @@ module Courses
         levels: levels,
         course_id: @course.id,
         current_coach: students_presenter.current_coach_details,
-        team_coaches: students_presenter.team_coaches
+        team_coaches: students_presenter.team_coaches,
+        team_tags: @course.team_tags,
+        user_tags: @course.user_tags
       }
     end
 
@@ -29,9 +31,7 @@ module Courses
     end
 
     def user_names(timeline_event)
-      timeline_event.founders.map do |founder|
-        founder.user.name
-      end.join(', ')
+      timeline_event.founders.map { |founder| founder.user.name }.join(', ')
     end
   end
 end

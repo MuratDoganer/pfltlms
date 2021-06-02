@@ -9,16 +9,22 @@ let tc = I18n.t(~scope="components.CoursesReview__Root")
 
 type selectedTab = [#Reviewed | #Pending]
 
+type filter = {
+  nameOrEmail: option<string>,
+  selectedLevel: option<Level.t>,
+  selectedCoach: option<Coach.t>,
+  tags: Belt.Set.String.t,
+  sortDirection: [#Ascending | #Descending],
+  reviewedTabSortCriterion: reviewedTabSortCriterion,
+}
+
 type state = {
   pendingSubmissions: Submissions.t,
   reviewedSubmissions: Submissions.t,
   selectedTab: selectedTab,
-  selectedLevel: option<Level.t>,
-  selectedCoach: option<Coach.t>,
   filterString: string,
-  reviewedTabSortCriterion: reviewedTabSortCriterion,
-  sortDirection: [#Ascending | #Descending],
   reloadAt: Js.Date.t,
+  filter: filter,
 }
 
 type action =
@@ -29,6 +35,10 @@ type action =
   | UpdateReviewedSubmission(IndexSubmission.t)
   | SelectPendingTab
   | SelectReviewedTab
+  | SetNameOrEmail(string)
+  | UnsetNameOrEmail
+  | SelectTag(string)
+  | DeselectTag(string)
   | SelectCoach(Coach.t)
   | DeselectCoach
   | UpdateFilterString(string)
@@ -39,11 +49,11 @@ type action =
 let makeSortBy = state =>
   switch state.selectedTab {
   | #Pending =>
-    SubmissionsSorting.make(~sortCriterion=#SubmittedAt, ~sortDirection=state.sortDirection)
+    SubmissionsSorting.make(~sortCriterion=#SubmittedAt, ~sortDirection=state.filter.sortDirection)
   | #Reviewed =>
     SubmissionsSorting.make(
-      ~sortCriterion=state.reviewedTabSortCriterion,
-      ~sortDirection=state.sortDirection,
+      ~sortCriterion=state.filter.reviewedTabSortCriterion,
+      ~sortDirection=state.filter.sortDirection,
     )
   }
 
@@ -51,10 +61,10 @@ let reducer = (state, action) =>
   switch action {
   | SelectLevel(level) => {
       ...state,
-      selectedLevel: Some(level),
+      filter: {...state.filter, selectedLevel: Some(level)},
       filterString: "",
     }
-  | DeselectLevel => {...state, selectedLevel: None}
+  | DeselectLevel => {...state, filter: {...state.filter, selectedLevel: None}}
   | ReloadSubmissions => {
       ...state,
       pendingSubmissions: Unloaded,
@@ -62,7 +72,7 @@ let reducer = (state, action) =>
       reloadAt: Js.Date.make(),
     }
   | SetSubmissions(submissions, selectedTab, hasNextPage, endCursor, totalCount) =>
-    let filter = Submissions.makeFilter(state.selectedLevel, state.selectedCoach)
+    let filter = Submissions.makeFilter(state.filter.selectedLevel, state.filter.selectedCoach)
 
     let updatedSubmissions = switch (hasNextPage, endCursor) {
     | (_, None)
@@ -83,7 +93,7 @@ let reducer = (state, action) =>
     | #Reviewed => {...state, reviewedSubmissions: updatedSubmissions}
     }
   | UpdateReviewedSubmission(submission) =>
-    let filter = Submissions.makeFilter(state.selectedLevel, state.selectedCoach)
+    let filter = Submissions.makeFilter(state.filter.selectedLevel, state.filter.selectedCoach)
 
     {
       ...state,
@@ -106,20 +116,64 @@ let reducer = (state, action) =>
         )
       },
     }
-  | SelectPendingTab => {...state, selectedTab: #Pending, sortDirection: #Ascending}
-  | SelectReviewedTab => {...state, selectedTab: #Reviewed, sortDirection: #Descending}
+  | SelectPendingTab => {
+      ...state,
+      selectedTab: #Pending,
+      filter: {...state.filter, sortDirection: #Ascending},
+    }
+  | SelectReviewedTab => {
+      ...state,
+      selectedTab: #Reviewed,
+      filter: {...state.filter, sortDirection: #Descending},
+    }
   | SelectCoach(coach) => {
       ...state,
-      selectedCoach: Some(coach),
+      filter: {
+        ...state.filter,
+        selectedCoach: Some(coach),
+      },
       filterString: "",
     }
-  | DeselectCoach => {...state, selectedCoach: None}
+  | DeselectCoach => {...state, filter: {...state.filter, selectedCoach: None}}
   | UpdateFilterString(filterString) => {...state, filterString: filterString}
-  | UpdateSortDirection(sortDirection) => {...state, sortDirection: sortDirection}
+  | UpdateSortDirection(sortDirection) => {
+      ...state,
+      filter: {...state.filter, sortDirection: sortDirection},
+    }
+  | SetNameOrEmail(search) => {
+      ...state,
+      filter: {
+        ...state.filter,
+        nameOrEmail: Some(search),
+      },
+      filterString: "",
+    }
+  | UnsetNameOrEmail => {
+      ...state,
+      filter: {
+        ...state.filter,
+        nameOrEmail: None,
+      },
+    }
+  | SelectTag(tag) => {
+      ...state,
+      filter: {
+        ...state.filter,
+        tags: state.filter.tags->Belt.Set.String.add(tag),
+      },
+      filterString: "",
+    }
+  | DeselectTag(tag) => {
+      ...state,
+      filter: {
+        ...state.filter,
+        tags: state.filter.tags->Belt.Set.String.remove(tag),
+      },
+    }
   | UpdateSortCriterion(selectedTab, criterion) =>
     switch selectedTab {
     | #Pending => state
-    | #Reviewed => {...state, reviewedTabSortCriterion: criterion}
+    | #Reviewed => {...state, filter: {...state.filter, reviewedTabSortCriterion: criterion}}
     }
   | SyncSubmissionStatus(overlaySubmission) =>
     let skipReload =
@@ -145,14 +199,18 @@ let reducer = (state, action) =>
   }
 
 let computeInitialState = currentTeamCoach => {
+  filter: {
+    nameOrEmail: None,
+    selectedLevel: None,
+    selectedCoach: currentTeamCoach,
+    tags: Belt.Set.String.empty,
+    sortDirection: #Ascending,
+    reviewedTabSortCriterion: #SubmittedAt,
+  },
   pendingSubmissions: Unloaded,
   reviewedSubmissions: Unloaded,
   selectedTab: #Pending,
-  selectedLevel: None,
-  selectedCoach: currentTeamCoach,
-  reviewedTabSortCriterion: #SubmittedAt,
   filterString: "",
-  sortDirection: #Ascending,
   reloadAt: Js.Date.make(),
 }
 
@@ -180,11 +238,15 @@ module Selectable = {
   type t =
     | Level(Level.t)
     | AssignedToCoach(Coach.t, string)
+    | NameOrEmail(string)
+    | Tag(string)
 
   let label = t =>
     switch t {
     | Level(level) => Some(LevelLabel.format(level |> Level.number |> string_of_int))
     | AssignedToCoach(_) => Some(tc("assigned_to"))
+    | NameOrEmail(_) => Some("Name or Email")
+    | Tag(_) => Some("Tagged with")
     }
 
   let value = t =>
@@ -192,6 +254,8 @@ module Selectable = {
     | Level(level) => level |> Level.name
     | AssignedToCoach(coach, currentCoachId) =>
       coach |> Coach.id == currentCoachId ? tc("me") : coach |> Coach.name
+    | NameOrEmail(search) => search
+    | Tag(tag) => tag
     }
 
   let searchString = t =>
@@ -204,20 +268,24 @@ module Selectable = {
       } else {
         tc("assigned_to_coach") ++ (coach |> Coach.name)
       }
+    | NameOrEmail(search) => search
+    | Tag(tag) => "tag " ++ tag
     }
 
   let color = _t => "gray"
   let level = level => Level(level)
+  let nameOrEmail = search => NameOrEmail(search)
+  let tag = tagString => Tag(tagString)
   let assignedToCoach = (coach, currentCoachId) => AssignedToCoach(coach, currentCoachId)
 }
 
 module Multiselect = MultiselectDropdown.Make(Selectable)
 
-let unselected = (levels, coaches, currentCoachId, state) => {
+let unselected = (levels, coaches, tags, currentCoachId, state) => {
   let unselectedLevels =
     levels
     |> Js.Array.filter(level =>
-      state.selectedLevel |> OptionUtils.mapWithDefault(
+      state.filter.selectedLevel |> OptionUtils.mapWithDefault(
         selectedLevel => level |> Level.id != (selectedLevel |> Level.id),
         true,
       )
@@ -227,46 +295,71 @@ let unselected = (levels, coaches, currentCoachId, state) => {
   let unselectedCoaches =
     coaches
     |> Js.Array.filter(coach =>
-      state.selectedCoach |> OptionUtils.mapWithDefault(
+      state.filter.selectedCoach |> OptionUtils.mapWithDefault(
         selectedCoach => coach |> Coach.id != Coach.id(selectedCoach),
         true,
       )
     )
     |> Array.map(coach => Selectable.assignedToCoach(coach, currentCoachId))
 
-  unselectedLevels |> Array.append(unselectedCoaches)
+  let trimmedFilterString = state.filterString |> String.trim
+  let nameOrEmail = trimmedFilterString == "" ? [] : [Selectable.nameOrEmail(trimmedFilterString)]
+
+  let unselectedTags =
+    Belt.Set.String.diff(tags, state.filter.tags)->Belt.Set.String.toArray
+      |> Js.Array.map(Selectable.tag)
+
+  unselectedLevels
+  |> Array.append(nameOrEmail)
+  |> Array.append(unselectedCoaches)
+  |> Array.append(unselectedTags)
 }
 
 let selected = (state, currentCoachId) => {
   let selectedLevel =
-    state.selectedLevel |> OptionUtils.mapWithDefault(
+    state.filter.selectedLevel |> OptionUtils.mapWithDefault(
       selectedLevel => [Selectable.level(selectedLevel)],
       [],
     )
 
   let selectedCoach =
-    state.selectedCoach |> OptionUtils.mapWithDefault(
+    state.filter.selectedCoach |> OptionUtils.mapWithDefault(
       selectedCoach => [Selectable.assignedToCoach(selectedCoach, currentCoachId)],
       [],
     )
 
-  selectedLevel |> Array.append(selectedCoach)
+  let selectedSearchString =
+    state.filter.nameOrEmail |> OptionUtils.mapWithDefault(
+      nameOrEmail => [Selectable.nameOrEmail(nameOrEmail)],
+      [],
+    )
+
+  let selectedTags = state.filter.tags |> Belt.Set.String.toArray |> Js.Array.map(Selectable.tag)
+
+  selectedLevel
+  |> Array.append(selectedCoach)
+  |> Array.append(selectedSearchString)
+  |> Array.append(selectedTags)
 }
 
 let onSelectFilter = (send, selectable) =>
   switch selectable {
   | Selectable.AssignedToCoach(coach, _currentCoachId) => send(SelectCoach(coach))
   | Level(level) => send(SelectLevel(level))
+  | NameOrEmail(nameOrEmail) => send(SetNameOrEmail(nameOrEmail))
+  | Tag(tag) => send(SelectTag(tag))
   }
 
 let onDeselectFilter = (send, selectable) =>
   switch selectable {
   | Selectable.AssignedToCoach(_) => send(DeselectCoach)
   | Level(_) => send(DeselectLevel)
+  | NameOrEmail(_) => send(UnsetNameOrEmail)
+  | Tag(tag) => send(DeselectTag(tag))
   }
 
 let filterPlaceholder = state =>
-  switch (state.selectedLevel, state.selectedCoach) {
+  switch (state.filter.selectedLevel, state.filter.selectedCoach) {
   | (None, Some(_)) => tc("filter_by_level")
   | (None, None) => tc("filter_by_level_or_submissions_assigned")
   | (Some(_), Some(_)) => tc("filter_by_another_level")
@@ -286,7 +379,7 @@ let restoreFilterNotice = (send, currentCoach, message) =>
 
 let restoreAssignedToMeFilter = (state, send, currentTeamCoach) =>
   currentTeamCoach |> OptionUtils.mapWithDefault(currentCoach =>
-    switch state.selectedCoach {
+    switch state.filter.selectedCoach {
     | None =>
       restoreFilterNotice(send, currentCoach, tc("now_showing_submissions_from_all_students"))
     | Some(selectedCoach) when selectedCoach |> Coach.id == Coach.id(currentCoach) => React.null
@@ -340,14 +433,14 @@ let submissionsSorter = (state, send) => {
 
   let selectedCriterion = switch state.selectedTab {
   | #Pending => #SubmittedAt
-  | #Reviewed => state.reviewedTabSortCriterion
+  | #Reviewed => state.filter.reviewedTabSortCriterion
   }
   <div ariaLabel="Change submissions sorting" className="flex-shrink-0 mt-3 md:mt-0 md:ml-2">
     <label className="block text-tiny font-semibold uppercase"> {tc("sort_by") |> str} </label>
     <SubmissionsSorter
       criteria
       selectedCriterion
-      direction=state.sortDirection
+      direction=state.filter.sortDirection
       onDirectionChange={sortDirection => send(UpdateSortDirection(sortDirection))}
       onCriterionChange={sortCriterion =>
         send(UpdateSortCriterion(state.selectedTab, sortCriterion))}
@@ -374,7 +467,9 @@ let submissionsCount = submissions =>
   )
 
 @react.component
-let make = (~levels, ~courseId, ~teamCoaches, ~currentCoach) => {
+let make = (~levels, ~courseId, ~teamCoaches, ~currentCoach, ~teamTags, ~userTags) => {
+  let allTags = Belt.Set.String.union(teamTags, userTags)
+
   let (currentTeamCoach, _) = React.useState(() =>
     teamCoaches->Belt.Array.some(coach => coach |> Coach.id == (currentCoach |> Coach.id))
       ? Some(currentCoach)
@@ -382,7 +477,7 @@ let make = (~levels, ~courseId, ~teamCoaches, ~currentCoach) => {
   )
 
   let (state, send) = React.useReducerWithMapState(reducer, currentTeamCoach, computeInitialState)
-
+  Js.log(state.filter)
   let url = RescriptReactRouter.useUrl()
 
   <div>
@@ -425,8 +520,8 @@ let make = (~levels, ~courseId, ~teamCoaches, ~currentCoach) => {
               </label>
               <Multiselect
                 id="filter"
-                unselected={unselected(levels, teamCoaches, currentCoach |> Coach.id, state)}
-                selected={selected(state, currentCoach |> Coach.id)}
+                unselected={unselected(levels, teamCoaches, allTags, Coach.id(currentCoach), state)}
+                selected={selected(state, Coach.id(currentCoach))}
                 onSelect={onSelectFilter(send)}
                 onDeselect={onDeselectFilter(send)}
                 value=state.filterString
@@ -445,10 +540,12 @@ let make = (~levels, ~courseId, ~teamCoaches, ~currentCoach) => {
         <CoursesReview__SubmissionsTab
           courseId
           selectedTab=state.selectedTab
-          selectedLevel=state.selectedLevel
-          selectedCoach=state.selectedCoach
+          selectedLevel=state.filter.selectedLevel
+          selectedCoach=state.filter.selectedCoach
           sortBy={makeSortBy(state)}
           levels
+          search=state.filter.nameOrEmail
+          tags=state.filter.tags
           submissions={displayedSubmissions(state)}
           reloadAt=state.reloadAt
           updateSubmissionsCB={(

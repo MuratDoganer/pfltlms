@@ -13,7 +13,7 @@ gem 'fastimage', '~> 2.1'
 gem 'image_processing', '~> 1.12' # Gem to support variants in ActiveStorage
 
 # Use Webpack to manage app-like JavaScript modules in Rails.
-gem 'webpacker', '~> 5.2'
+gem 'webpacker', '~> 5.4'
 
 gem 'coffee-rails', '~> 5.0.0' # Coffeescript on Rails.
 gem 'devise', '~> 4.7', '>= 4.7.1' # User auth library.
